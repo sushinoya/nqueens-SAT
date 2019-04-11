@@ -32,12 +32,12 @@ counter_helper([RowNum|RowNumLst], [TileNum|TileNumLst], ColNum) :-
 % This procedure takes in a row number, Queen and a list of 
 % other row numbers, OtherQueens and ensures that Queen is not
 % diagonally attacking any of the other queens.
-not_confronting_diagonally(Queen, OtherQueens) :- \+ diagonal_helper(Queen, OtherQueens, 1).
-diagonal_helper(Queen, [FirstQueen|_], Offset) :- FirstQueen is Queen + Offset.
-diagonal_helper(Queen, [FirstQueen|_], Offset) :- FirstQueen is Queen - Offset.
-diagonal_helper(Queen, [_|Rest], Offset) :-
+not_confronting_diagonally(Queen, OtherQueens) :- \+ diagonal_confront_helper(Queen, OtherQueens, 1).
+diagonal_confront_helper(Queen, [FirstQueen|_], Offset) :- FirstQueen is Queen + Offset.
+diagonal_confront_helper(Queen, [FirstQueen|_], Offset) :- FirstQueen is Queen - Offset.
+diagonal_confront_helper(Queen, [_|Rest], Offset) :-
   NextCol is Offset + 1,
-  diagonal_helper(Queen, Rest, NextCol).
+  diagonal_confront_helper(Queen, Rest, NextCol).
 
 % This prodecure takes in three arguments - SolSoFar, PossiblePositions and Sol.
 % Sol is the final list of row numbers which is a solution to the nqueens problem
