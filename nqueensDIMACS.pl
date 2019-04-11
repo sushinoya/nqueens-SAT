@@ -1,3 +1,4 @@
+:- use_module(library(lists)).
 
 % This is very similar to the range function in python or 
 % [a..b] in many functional languages. It creates a list of Integers
@@ -8,39 +9,68 @@ range(Start, End, Jump, [Start|Rest]) :-
   NextStart is Start + Jump, !,
   range(NextStart, End, Jump, Rest).
 
-number_of_clauses(N, NumClauses) :- 
-  NumClauses is 4 * N.
-% N is the number of queens and Lst is a list of
-% clauses.
-nqueensDIMACS(N, Lst) :-
-  row_clauses(N, RowClauses),
-  col_clauses(N, ColumnClauses),
-  diagonal_clauses(N, DiagonalClauses),
-  append(RowClauses, ColumnClauses, AllButDiagonalClauses),
-  append(AllButDiagonalClauses, DiagonalClauses, Lst).
+sum_to_n(N, Res) :- Res is N * (N+1) / 2 .
+
+number_of_clauses(N, NumClauses) :-
+  num_of_row_or_col_clauses(N, NumRowOrColClauses),
+  num_of_diagonal_clauses(N, NumDiagonalClauses),
+  FloatNumClauses is (2 * NumRowOrColClauses) + NumDiagonalClauses,
+  fix(FloatNumClauses, NumClauses).
+
+num_of_row_or_col_clauses(N, NumClauses) :-
+  NMinusOne is N - 1,
+  sum_to_n(NMinusOne, SumToNMinus1),
+  NumClauses is SumToNMinus1 * N.
+
+num_of_diagonal_clauses(N, NumClauses) :-
+  num_of_diagonal_clauses_in_one_dir(N, NumClausesOneDir),
+  NumClauses is NumClausesOneDir * 2.
+
+num_of_aux_diagonal_clauses(N, 0) :- N < 3, !.
+num_of_aux_diagonal_clauses(N, Res) :- 
+  NMinusOne is N - 1, NMinusTwo is N - 2,
+  num_of_aux_diagonal_clauses(NMinusOne, Acc),
+  sum_to_n(NMinusTwo, SumToNMinus1),
+  Res is SumToNMinus1 + Acc.
+
+num_of_diagonal_clauses_in_one_dir(N, NumClauses) :-
+  NMinusOne is N - 1, sum_to_n(NMinusOne, SumToNMinus1),
+  num_of_aux_diagonal_clauses(N, NumAuxClauses),
+  NumClauses is SumToNMinus1 + (2 * NumAuxClauses).
+
+all :- maplist(nqueensDIMACS, [1,2,3,4,5,6,7,8]).
+
+nqueensDIMACS(N) :-
+  create_open_file(N, FileStream),
+  row_clauses(N, FileStream),
+  col_clauses(N, FileStream),
+  diagonal_clauses(N, FileStream),
+  close(FileStream).
 
 
-row_clauses(N, Lst) :- row_clause_helper(N, 1, Lst).
-row_clause_helper(N, Start, []) :- Start > N * N, !.
-row_clause_helper(N, Start, [Row|OtherAns]) :-
+row_clauses(N, FileStream) :- row_clause_helper(N, 1, FileStream).
+row_clause_helper(N, Start, _) :- Start > N * N, !.
+row_clause_helper(N, Start, FileStream) :-
   NewStart is Start + N,
   RowEnd is Start + N - 1,
   range(Start, RowEnd, 1, Row),
-  row_clause_helper(N, NewStart, OtherAns).
+  write_tiles_constraints(Row, FileStream),
+  row_clause_helper(N, NewStart, FileStream).
 
 
-col_clauses(N, Lst) :- col_clause_helper(N, 1, Lst).
-col_clause_helper(N, Start, []) :- Start > N, !.
-col_clause_helper(N, Start, [Col|OtherAns]) :-
+col_clauses(N, FileStream) :- col_clause_helper(N, 1, FileStream).
+col_clause_helper(N, Start, _) :- Start > N, !.
+col_clause_helper(N, Start, FileStream) :-
   NewStart is Start + 1,
   ColEnd is Start + ((N - 1) * N),
   range(Start, ColEnd, N, Col),
-  col_clause_helper(N, NewStart, OtherAns).
+  write_tiles_constraints(Col, FileStream),
+  col_clause_helper(N, NewStart, FileStream).
 
 
-add_to_lst([], [], _).
-add_to_lst([H1|Lst], [H2|NewList], Offset) :-
-  H2 is H1 + Offset, add_to_lst(Lst, NewList, Offset).
+add_offset_to_every_element([], [], _).
+add_offset_to_every_element([H1|Lst], [H2|NewList], Offset) :-
+  H2 is H1 + Offset, add_offset_to_every_element(Lst, NewList, Offset).
 
 without_last([], []).
 without_last([_], []) :- !.
@@ -48,51 +78,52 @@ without_last([X|Xs], [X|WithoutLast]) :-
     without_last(Xs, WithoutLast).
 
 diagonal_clauses(1, [[1]]) :- !.
-diagonal_clauses(N, Lst) :-
-  diagonal_right_clauses(N, RightDiagonalClauses),
-  diagonal_left_clauses(N, LeftDiagonalClauses),
-  append(RightDiagonalClauses, LeftDiagonalClauses, Lst).
+diagonal_clauses(N, FileStream) :-
+  diagonal_right_clauses(N, FileStream),
+  diagonal_left_clauses(N, FileStream).
 
-
-diagonal_right_clauses(N, [MainDiagonal|AllSideDiagonals]) :-
+diagonal_right_clauses(N, FileStream) :-
   LastTile is N * N, Offset is N + 1,
   range(1, LastTile, Offset, MainDiagonal),
-  diagonal_helper(MainDiagonal, AllRightDiagonals, 1),
-  diagonal_helper(MainDiagonal, AllLeftDiagonals, -1),
-  append(AllRightDiagonals, AllLeftDiagonals, AllSideDiagonals).
+  write_tiles_constraints(MainDiagonal, FileStream),
+  diagonal_helper(MainDiagonal, FileStream, 1),
+  diagonal_helper(MainDiagonal, FileStream, -1).
 
-diagonal_left_clauses(N, [LeftMainDiagonal|AllSideDiagonals]) :-
+diagonal_left_clauses(N, FileStream) :-
   LastTile is N * (N - 1) + 1, Offset is N - 1, Start = N,
   range(Start, LastTile, Offset, MainDiagonal),
   reverse(MainDiagonal, LeftMainDiagonal),
-  diagonal_helper(LeftMainDiagonal, AllRightDiagonals, 1),
-  diagonal_helper(LeftMainDiagonal, AllLeftDiagonals, -1),
-  append(AllRightDiagonals, AllLeftDiagonals, AllSideDiagonals).
+  write_tiles_constraints(LeftMainDiagonal, FileStream),
+  diagonal_helper(LeftMainDiagonal, FileStream, 1),
+  diagonal_helper(LeftMainDiagonal, FileStream, -1).
 
-
-diagonal_helper([_], [], _) :- !.
-diagonal_helper(Diagonal, [NextDiagonal|AllOtherDiagonals], Offset) :-
+diagonal_helper([_], _, _) :- !.
+diagonal_helper(Diagonal, FileStream, Offset) :-
   Offset > 0,
-  add_to_lst(Diagonal, NewList, Offset),
+  add_offset_to_every_element(Diagonal, NewList, Offset),
   without_last(NewList, NextDiagonal), !,
-  diagonal_helper(NextDiagonal, AllOtherDiagonals, Offset).
-diagonal_helper(Diagonal, [NextDiagonal|AllOtherDiagonals], Offset) :-
-  add_to_lst(Diagonal, NewList, Offset),
-  NewList = [_|NextDiagonal],
-  diagonal_helper(NextDiagonal, AllOtherDiagonals, Offset).
+  write_tiles_constraints(NextDiagonal, FileStream),
+  diagonal_helper(NextDiagonal, FileStream, Offset).
 
+diagonal_helper(Diagonal, FileStream, Offset) :-
+  add_offset_to_every_element(Diagonal, NewList, Offset),
+  NewList = [_|NextDiagonal],
+  write_tiles_constraints(NextDiagonal, FileStream),
+  diagonal_helper(NextDiagonal, FileStream, Offset).
+
+
+% FILE I/O
 
 create_open_file(N, FileStream) :-
   term_string(N, StrN), join_string(["nqueen", StrN, ".cnf"], "", File),
   open(File, append, FileStream),
   writeln(FileStream, "c Generated by nqueensDIMACS.pl"),
-  number_of_clauses(N, NumClauses), term_string(NumClauses, StrNumClauses),
+  number_of_clauses(N, NumClauses), 
+  print(NumClauses),
+  
+  term_string(NumClauses, StrNumClauses),
   join_string(["p", "cnf", StrN, StrNumClauses], " ", OpeningLine),
-  writeln(FileStream, OpeningLine),
-  sh("prolog").
-
-close_file(FileStream) :-
-  close(FileStream).
+  writeln(FileStream, OpeningLine).
 
 
 write_tiles_constraints([], _).
@@ -110,7 +141,6 @@ write_clause_to_file(FileStream, Clause) :-
   maplist(term_string, Clause, StrAtoms),
   join_string(StrAtoms, " ", StrClause),
   writeln(FileStream, StrClause).
-
 
 get_negated_tile_pairs(_, [], []).
 get_negated_tile_pairs(Tile, [AnotherTile|OtherTiles], Pairs) :-
