@@ -147,8 +147,7 @@ read_output_file(FileName, IsSat, Answer) :-
 % For every diagonal like (1, 6, 11, 16) or (2, 7, 12) or (9, 6, 3),
 % we generate only the clauses we need to ensure at most one queen. 
 % Similar to rows and columns, we go ahead and find all pairs in the diagonals and negate them.
-% every negated pair is a clause
-
+% every negated pair is a clause.
 
 % Adds at least one queen in a row and at most one queen in a row.
 row_clauses(N, FileStream) :- row_clause_helper(N, 1, FileStream).
@@ -171,15 +170,31 @@ col_clause_helper(N, Start, FileStream) :-
   col_clause_helper(N, NewStart, FileStream).
 
 
+% Adds one to every element in the list
 add_offset_to_every_element([], [], _).
 add_offset_to_every_element([H1|Lst], [H2|NewList], Offset) :-
   H2 is H1 + Offset, add_offset_to_every_element(Lst, NewList, Offset).
 
+% Drops the last element
 without_last([], []).
 without_last([_], []) :- !.
 without_last([X|Xs], [X|WithoutLast]) :- 
     without_last(Xs, WithoutLast).
 
+% DIAGONAL CLAUSES SECTION
+
+% To generate diagonals, we first get the main diagonal in one direction and then keep
+% shifting right or left until the end of the board. So in 4 x 4, the right main diagonal
+% is (1, 6, 11, 16) and the left main diagonal is (13, 10, 7, 4). If we shift one step from
+% the right main diagonal, we get (2, 7, 12). A shift in the other direction will get us
+% (5, 10, 15). Here is the board again fr your reference - 
+
+% 13 14 15 16
+%  9 10 11 12
+%  5  6  7  8
+%  1  2  3  4
+
+% Generates the at most one queen in each diagonal clauses
 diagonal_clauses(1, [[1]]) :- !.
 diagonal_clauses(N, FileStream) :-
   diagonal_right_clauses(N, FileStream),
@@ -215,7 +230,7 @@ diagonal_helper(Diagonal, FileStream, Offset) :-
   diagonal_helper(NextDiagonal, FileStream, Offset).
 
 
-% FILE I/O
+% FILE INPUT/OUTPUT
 
 create_open_DIMACS_file(N, FileStream) :-
   term_string(N, StrN), join_string(["nqueens", StrN, ".cnf"], "", File),
@@ -227,7 +242,6 @@ create_open_DIMACS_file(N, FileStream) :-
   join_string(["p", "cnf", StrN, StrNumClauses], " ", OpeningLine),
   writeln(FileStream, OpeningLine).
 
-
 write_tiles_and_other_constraints([Tile|OtherTiles], FileStream) :-
   write_clause_to_file(FileStream, [Tile|OtherTiles]),
   write_tiles_constraints([Tile|OtherTiles], FileStream).
@@ -238,17 +252,21 @@ write_tiles_constraints([Tile|OtherTiles], FileStream) :-
   write_clauses_to_file(FileStream, Pairs),
   write_tiles_constraints(OtherTiles, FileStream).
 
+% Writes a list of clauses to a file
 write_clauses_to_file(_, []). 
 write_clauses_to_file(FileStream, [Clause|Clauses]) :- 
   write_clause_to_file(FileStream, Clause),
   write_clauses_to_file(FileStream, Clauses).
 
+% Writes a clause/list to a file and adds a 0 at the end
 write_clause_to_file(FileStream, Clause) :-
   maplist(term_string, Clause, StrAtoms),
   append(StrAtoms, ["0"], StrAtomsWithLineDelimiter),
   join_string(StrAtomsWithLineDelimiter, " ", StrClause),
   writeln(FileStream, StrClause).
 
+% This is used for taking in a line of tiles on the board and generating its
+% "at most one" clauses. So 1, [2,3,4] will be [[-1, -2], [-1, -3], [-1, -4]]
 get_negated_tile_pairs(_, [], []).
 get_negated_tile_pairs(Tile, [AnotherTile|OtherTiles], Pairs) :-
   NegatedTileA is -1 * Tile, NegatedTileB is -1 * AnotherTile,
